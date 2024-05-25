@@ -44,9 +44,64 @@ WordCount *word_counts = NULL;
  * Returns the total amount of words found in infile.
  * Useful functions: fgetc(), isalpha().
  */
+
+#define INITIAL_BUF_SIZE 8
 int num_words(FILE* infile) {
   int num_words = 0;
+  char c;
+  char* cur_string = (char *)  malloc(INITIAL_BUF_SIZE + 1); // account for \0
+  int curr_buf_size = INITIAL_BUF_SIZE;
+  if (cur_string == NULL) {
+      fprintf(stderr, "Allocation failed!");
+      return 1;
+  }
+  int index = 0;
 
+  bool flag = false;
+
+  while ((c = fgetc(infile)) != EOF) {
+    if (isalpha(c)) {
+      flag = true;
+      cur_string[index] = c;
+      index++;
+    } else {
+      // Have unterminated string
+      if (flag == true) {
+        num_words++;
+        cur_string[index] = '\0';
+        // printf("%s\n", cur_string);
+        index = 0;
+        curr_buf_size = INITIAL_BUF_SIZE;
+        free(cur_string);
+        cur_string = (char *)  malloc(curr_buf_size + 1);
+        flag = false;
+      } else {
+        // Doesn't have unterminated string
+        continue;
+      }
+    }
+
+    if (index >= curr_buf_size) {
+      cur_string = (char *)  realloc(cur_string, curr_buf_size * 2 + 1);
+      curr_buf_size = curr_buf_size * 2;
+      if (cur_string == NULL) {
+      fprintf(stderr, "Allocation failed!");
+      return 1;
+    }
+    }
+  }
+
+  // To terminate the last word
+  if (flag == true) {
+    num_words++;
+    cur_string[index] = '\0';
+    // printf("%s\n", cur_string);
+    index = 0;
+    curr_buf_size = INITIAL_BUF_SIZE;
+    cur_string = (char *)  malloc(curr_buf_size);
+    free(cur_string);
+    flag = false;
+  }
   return num_words;
 }
 
@@ -62,6 +117,61 @@ int num_words(FILE* infile) {
  * and 0 otherwise.
  */
 int count_words(WordCount **wclist, FILE *infile) {
+  char c;
+  char* cur_string = (char *)  malloc(INITIAL_BUF_SIZE + 1); // account for \0
+  int curr_buf_size = INITIAL_BUF_SIZE;
+  if (cur_string == NULL) {
+      fprintf(stderr, "Allocation failed!");
+      return 1;
+  }
+  int index = 0;
+
+  bool flag = false;
+  while ((c = fgetc(infile)) != EOF) {
+    if (isalpha(c)) {
+      flag = true;
+      cur_string[index] = tolower(c);
+      index++;
+    } else {
+      // Have unterminated string
+      if (flag == true) {
+        cur_string[index] = '\0';
+        add_word(wclist, cur_string);
+        index = 0;
+        curr_buf_size = INITIAL_BUF_SIZE;
+        free(cur_string);
+        cur_string = (char *) malloc(curr_buf_size + 1);
+        if (cur_string == NULL) {
+          fprintf(stderr, "Allocation failed!");
+          return 1;
+        }
+        flag = false;
+      } else {
+        // Doesn't have unterminated string
+        continue;
+      }
+    }
+
+    if (index >= curr_buf_size) {
+      cur_string = (char *)  realloc(cur_string, curr_buf_size * 2 + 1);
+      curr_buf_size = curr_buf_size * 2;
+      if (cur_string == NULL) {
+        fprintf(stderr, "Allocation failed!");
+        return 1;
+      }
+    }
+  }
+
+  // To terminate the last word
+  if (flag == true) {
+    cur_string[index] = '\0';
+    add_word(wclist, cur_string);
+    index = 0;
+    curr_buf_size = INITIAL_BUF_SIZE;
+    cur_string = (char *)  malloc(curr_buf_size);
+    free(cur_string);
+    flag = false;
+  }
   return 0;
 }
 
@@ -70,7 +180,7 @@ int count_words(WordCount **wclist, FILE *infile) {
  * Useful function: strcmp().
  */
 static bool wordcount_less(const WordCount *wc1, const WordCount *wc2) {
-  return 0;
+  return wc1 -> count - wc2 -> count < 0 || ((wc1 -> count == wc2 -> count) && strcmp(wc1 -> word, wc2 -> word) < 0);
 }
 
 // In trying times, displays a helpful message.
@@ -133,10 +243,26 @@ int main (int argc, char *argv[]) {
   if ((argc - optind) < 1) {
     // No input file specified, instead, read from STDIN instead.
     infile = stdin;
+    total_words += num_words(infile);
+    rewind(infile);
+    count_words(&word_counts, infile);
+    fclose(infile);
   } else {
     // At least one file specified. Useful functions: fopen(), fclose().
     // The first file can be found at argv[optind]. The last file can be
     // found at argv[argc-1].
+
+    for (int file_ind = optind; file_ind < argc; file_ind++) {
+      infile = fopen(argv[file_ind], "r");
+      if (infile == NULL) {
+        fprintf(stderr, "File does not exist!\n");
+        return 1;
+      }
+      total_words += num_words(infile);
+      rewind(infile);
+      count_words(&word_counts, infile);
+      fclose(infile);
+    }
   }
 
   if (count_mode) {

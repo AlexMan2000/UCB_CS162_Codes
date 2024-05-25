@@ -32,21 +32,76 @@
 #include "word_count.h"
 #include "word_helpers.h"
 
+
+// Shared resources on the static memory
+word_count_list_t word_counts;
+
+
+// struct to hold thread arguments
+typedef struct targs {
+  long threadid;
+  char* infile;
+} thread_args_t;
+
+
+
+// typedef struct targs {
+//   long threadid;
+//   char* infile;
+//   word_count_list_t* word_count_list;
+// } thread_args_t;
+
+
+void* threadfun(void* args) {
+  thread_args_t* t_args = (thread_args_t*) args;
+  char* filename = t_args -> infile;
+  FILE* infile = fopen(filename, "r");
+  
+  if (infile == NULL) {
+      fprintf(stderr, "Error occurred during file opening!");
+      fclose(infile);
+      return NULL;
+  }
+
+  // printf("Thread %lx", t_args->threadid);
+  count_words(&word_counts, infile);
+  fclose(infile);
+  return NULL;
+}
+
+
+
 /*
  * main - handle command line, spawning one thread per file.
  */
 int main(int argc, char* argv[]) {
   /* Create the empty data structure. */
-  word_count_list_t word_counts;
   init_words(&word_counts);
+  
+  int rc; // Detect error when creating threads
+  long t;
+
+  char* filename = NULL;
 
   if (argc <= 1) {
     /* Process stdin in a single thread. */
     count_words(&word_counts, stdin);
   } else {
-    /* TODO */
-  }
+    pthread_t threads[argc - 1];
+    for (t = 1; t < argc; t++ ) {
+      filename = argv[t];
+      thread_args_t t_args = {t, filename};
+      rc = pthread_create(&threads[t - 1], NULL, threadfun, (void *) &t_args);
+      if (rc) {
+        printf("ERROR; return code from pthread_create() is %d\n", rc);
+        exit(-1);
+      }
 
+      for (t = 1; t < argc; t++) {
+        pthread_join(threads[t - 1], NULL);
+      }
+    }
+  }
   /* Output final result of all threads' work. */
   wordcount_sort(&word_counts, less_count);
   fprint_words(&word_counts, stdout);
